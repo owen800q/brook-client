@@ -228,7 +228,7 @@ final class Engine {
         // brook runs unprivileged; only routing/DNS/proxy changes go through the helper.
         let process = Process()
         process.executableURL = URL(fileURLWithPath: brookPath)
-        var args = ["connect", "--link", link.pinned(toIP: pinIP), "--socks5", "127.0.0.1:\(config.socksPort)"]
+        var args = ["connect", "--link", link.pinned(toIP: pinIP, udpOverTCP: config.udpOverTCP), "--socks5", "127.0.0.1:\(config.socksPort)"]
         if config.mode == .proxy { args += ["--http", "127.0.0.1:\(config.httpPort)"] }
         process.arguments = args
         let log = openLog()

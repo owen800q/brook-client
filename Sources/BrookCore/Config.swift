@@ -31,6 +31,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var connectOnLaunch = false
     /// TUN mode tunnels IPv4 only; reject global IPv6 so apps fall back to IPv4 instead of leaking.
     public var blockIPv6 = true
+    /// Tunnel UDP (incl. DNS) inside TCP; needed when the server's firewall drops UDP.
+    public var udpOverTCP = true
 
     public init() {}
 
@@ -46,6 +48,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         httpPort = try c.decodeIfPresent(Int.self, forKey: .httpPort) ?? d.httpPort
         connectOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .connectOnLaunch) ?? d.connectOnLaunch
         blockIPv6 = try c.decodeIfPresent(Bool.self, forKey: .blockIPv6) ?? d.blockIPv6
+        udpOverTCP = try c.decodeIfPresent(Bool.self, forKey: .udpOverTCP) ?? d.udpOverTCP
     }
 
     public var selectedProfile: Profile? {

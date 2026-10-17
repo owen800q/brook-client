@@ -14,6 +14,7 @@ final class SettingsModel: ObservableObject {
     @Published var httpPort: Int
     @Published var connectOnLaunch: Bool
     @Published var blockIPv6: Bool
+    @Published var udpOverTCP: Bool
     @Published var launchAtLogin: Bool
     @Published var helperStatus = "Checking…"
     @Published var helperReady = false
@@ -28,6 +29,7 @@ final class SettingsModel: ObservableObject {
         httpPort = c.httpPort
         connectOnLaunch = c.connectOnLaunch
         blockIPv6 = c.blockIPv6
+        udpOverTCP = c.udpOverTCP
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
@@ -42,6 +44,7 @@ final class SettingsModel: ObservableObject {
         c.httpPort = httpPort
         c.connectOnLaunch = connectOnLaunch
         c.blockIPv6 = blockIPv6
+        c.udpOverTCP = udpOverTCP
         return c
     }
 
@@ -121,6 +124,7 @@ struct SettingsView: View {
                     ? "All traffic goes through Brook except the ranges below, which go straight to your router — so LAN devices (TV, NAS, printer, sdb) keep working."
                     : "Only apps that honour the macOS proxy use Brook. Command-line tools like sdb are never proxied.")
                     .font(.caption).foregroundStyle(.secondary)
+                Toggle("UDP over TCP (needed if your server's firewall blocks UDP — otherwise DNS fails)", isOn: $model.udpOverTCP)
                 Toggle("Block public IPv6 while connected (prevents leaks; LAN IPv6 unaffected)", isOn: $model.blockIPv6)
                     .disabled(model.mode != .tun)
                 TextField("DNS while connected (TUN)", text: $model.dnsText)

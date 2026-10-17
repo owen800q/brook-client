@@ -101,6 +101,12 @@ public struct BrookLink: Equatable, Sendable {
     /// matches the host route we install outside the tunnel. Also makes implicit URL ports
     /// explicit, since `brook connect` rejects URLs without one.
     public func pinned(toIP ip: String) -> String {
+        pinned(toIP: ip, udpOverTCP: false)
+    }
+
+    /// `udpOverTCP` carries UDP inside the TCP/QUIC stream (brook's udpovertcp / udpoverstream),
+    /// for servers whose firewall drops UDP. ws/wss already do this inherently.
+    public func pinned(toIP ip: String, udpOverTCP: Bool) -> String {
         var items = query
         var changed = false
         func set(_ key: String, _ value: String) {
@@ -116,6 +122,14 @@ public struct BrookLink: Equatable, Sendable {
             if let v = serverValueWithPort { set(kind.rawValue, v) }
             // Keep the domain in the URL for TLS SNI / Host header; pin the dial address.
             if !dialHostIsIPv4 { set("address", "\(ip):\(dialPort)") }
+        }
+        if udpOverTCP {
+            let flag: String? = switch kind {
+            case .server: "udpovertcp"
+            case .quicserver: "udpoverstream"
+            default: nil
+            }
+            if let flag, items.first(where: { $0.key == flag })?.value != "true" { set(flag, "true") }
         }
         return changed ? "brook://\(kind.rawValue)?" + Self.encodeQuery(items) : raw
     }
