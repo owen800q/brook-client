@@ -1,0 +1,46 @@
+# Isolated lab reproducing "VPN on, but must still reach the TV on the home LAN".
+# The client can only reach the "internet" network through the brook tunnel.
+name: brook-client-lab
+
+networks:
+  lan: # home network (like 192.168.0.0/24 at home)
+    ipam: { config: [{ subnet: 192.168.50.0/24 }] }
+  wan: # ISP side, where the brook server lives
+    ipam: { config: [{ subnet: 203.0.113.0/24 }] }
+  internet: # only the brook server can reach this
+    ipam: { config: [{ subnet: 198.51.100.0/24 }] }
+
+x-image: &image
+  image: brook-client-lab
+  build: .
+
+services:
+  server:
+    <<: *image
+    command: brook server -l :9999 -p labpass
+    networks:
+      wan: { ipv4_address: 203.0.113.2 }
+      internet: { ipv4_address: 198.51.100.2 }
+
+  web:
+    <<: *image
+    # HTTP echo on 80, plus brook's TCP+UDP echo on 7777 to verify UDP (DNS-like) traffic is tunneled.
+    command: sh -c "brook echoserver -l :7777 & exec python3 /opt/echo_server.py 80"
+    networks:
+      internet: { ipv4_address: 198.51.100.80 }
+
+  tv: # stands in for the Samsung TV; sdb uses TCP 26101
+    <<: *image
+    command: python3 /opt/echo_server.py 26101
+    networks:
+      lan: { ipv4_address: 192.168.50.20 }
+
+  client:
+    <<: *image
+    command: sleep infinity
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun]
+    networks:
+      wan: { ipv4_address: 203.0.113.10, gw_priority: 1 }
+      lan: { ipv4_address: 192.168.50.10 }
+    depends_on: [server, web, tv]

@@ -3,3 +3,4 @@ build/
 vendor/
 *.app
 .DS_Store
+Tests/docker/bin/

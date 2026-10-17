@@ -262,10 +262,10 @@ do_up() {
 	done
 
 	if [ $DRY = 1 ]; then
-		echo "+ $TUN2SOCKS -device $_tun -proxy socks5://127.0.0.1:$_socks -loglevel warn"
+		echo "+ $TUN2SOCKS --device $_tun --proxy socks5://127.0.0.1:$_socks --loglevel warn"
 		_t2s=999999
 	else
-		"$TUN2SOCKS" -device "$_tun" -proxy "socks5://127.0.0.1:$_socks" -loglevel warn </dev/null >>"$LOG" 2>&1 &
+		"$TUN2SOCKS" --device "$_tun" --proxy "socks5://127.0.0.1:$_socks" --loglevel warn </dev/null >>"$LOG" 2>&1 &
 		_t2s=$!
 	fi
 	record tun2socks "$_t2s"

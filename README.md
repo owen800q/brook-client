@@ -30,8 +30,17 @@ LAN traffic is routed by the kernel directly; it never reaches any userspace sta
 ```sh
 brew install brook
 scripts/build-app.sh --install     # → ~/Applications/Brook Client.app (downloads tun2socks v2.7.0 once)
-swift test                         # 57 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
+swift test                         # 58 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
+Tests/docker/run.sh                # end-to-end data-path lab in Docker (doesn't touch the host network)
 ```
+
+`Tests/docker` builds three isolated networks: a home LAN with a fake TV on `:26101`, a WAN with a brook server, and an "internet" that only the server can reach. It runs the real brook and tun2socks with the same route plan as the helper, using Linux `ip` instead of BSD `route`. It checks the following:
+- Internet TCP and UDP exit via the brook server.
+- The TV is reached directly from the LAN IP.
+- A nonexistent LAN host is **not** fake-accepted.
+- The control step routes the LAN into the tunnel the way the official client does, and reproduces the bug.
+
+The lab doesn't cover the macOS GUI or the helper itself.
 
 ## Use
 

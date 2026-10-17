@@ -32,6 +32,14 @@ private func stateDir(files: [String: String] = [:]) throws -> URL {
 private let base = ["up", "--socks", "1080", "--gateway", "192.168.0.1", "--interface", "en1", "--server", "5.6.7.8"]
 
 @Suite(.serialized) struct HelperRegressionTests {
+    // tun2socks v2 uses GNU-style flags: "-device" is parsed as "-d evice" and it exits.
+    // Found by the Docker lab (Tests/docker).
+    @Test func tun2socksUsesDoubleDashFlags() throws {
+        let up = try dryRun(base + ["--watch", "1"], state: stateDir())
+        #expect(up.commands.contains(
+            "/Library/PrivilegedHelperTools/com.brookclient.tun2socks --device utun199 --proxy socks5://127.0.0.1:1080 --loglevel warn"))
+    }
+
     @Test func blockIPv6InstallsAndRemovesRejectRoute() throws {
         let dir = try stateDir()
         let up = try dryRun(base + ["--ipv6", "block", "--watch", "1"], state: dir)
