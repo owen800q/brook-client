@@ -71,6 +71,7 @@ final class SettingsModel: ObservableObject {
                 self.helperReady = s == .ready
                 self.helperStatus = switch s {
                 case .ready: "Installed"
+                case .notAuthorized: "Permission rule not active — reinstall"
                 case .outdated: "Outdated — reinstall"
                 case .notInstalled: "Not installed (required)"
                 }

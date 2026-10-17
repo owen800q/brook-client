@@ -11,7 +11,9 @@ export PATH
 DEST=/Library/PrivilegedHelperTools
 HELPER=$DEST/com.brookclient.helper
 TUN2SOCKS=$DEST/com.brookclient.tun2socks
-SUDOERS=/etc/sudoers.d/com.brookclient
+# No "." in the name: sudo's #includedir silently skips such files.
+SUDOERS=/etc/sudoers.d/brookclient
+LEGACY_SUDOERS="/etc/sudoers.d/com.brookclient"
 
 [ "$(id -u)" = 0 ] || { echo "must run as root" >&2; exit 1; }
 
@@ -36,11 +38,19 @@ install)
 	if ! visudo -cf "$tmp" >/dev/null; then rm -f "$tmp"; echo "sudoers validation failed" >&2; exit 1; fi
 	install -o root -g wheel -m 440 "$tmp" "$SUDOERS"
 	rm -f "$tmp"
+	rm -f "$LEGACY_SUDOERS" # older builds used a dotted name that sudo ignored
+
+	# Prove the rule is in effect (not shadowed or skipped) before reporting success.
+	if ! sudo -n -l -U "$user" "$HELPER" >/dev/null 2>&1 ||
+		! sudo -n -l -U "$user" | grep -q "NOPASSWD: $HELPER"; then
+		echo "sudoers rule was installed but is not in effect (does /etc/sudoers have '#includedir /private/etc/sudoers.d'?)" >&2
+		exit 1
+	fi
 	echo installed
 	;;
 uninstall)
 	[ -x "$HELPER" ] && "$HELPER" down >/dev/null 2>&1 || true
-	rm -f "$SUDOERS" "$HELPER" "$TUN2SOCKS"
+	rm -f "$SUDOERS" "$LEGACY_SUDOERS" "$HELPER" "$TUN2SOCKS"
 	rm -rf /var/run/com.brookclient
 	echo uninstalled
 	;;

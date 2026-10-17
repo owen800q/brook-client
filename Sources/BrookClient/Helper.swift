@@ -2,15 +2,23 @@ import Foundation
 
 /// Talks to the root helper through `sudo -n` (allowed by the sudoers rule the installer writes).
 enum Helper {
-    enum Status { case notInstalled, outdated, ready }
+    enum Status {
+        case notInstalled
+        /// Files are present but sudo still wants a password (sudoers rule missing/ignored).
+        case notAuthorized
+        case outdated
+        case ready
+    }
 
     private static var bundledHelper: URL { Paths.resources.appendingPathComponent("brook-client-helper") }
     private static var bundledTun2socks: URL { Paths.resources.appendingPathComponent("tun2socks") }
 
     static func status() -> Status {
         let fm = FileManager.default
-        guard fm.isExecutableFile(atPath: Paths.installedHelper), fm.isExecutableFile(atPath: Paths.installedTun2socks),
-              System.run("/usr/bin/sudo", ["-n", "-l", Paths.installedHelper]).ok else { return .notInstalled }
+        guard fm.isExecutableFile(atPath: Paths.installedHelper), fm.isExecutableFile(atPath: Paths.installedTun2socks) else {
+            return .notInstalled
+        }
+        guard System.run("/usr/bin/sudo", ["-n", "-l", Paths.installedHelper]).ok else { return .notAuthorized }
         // A newer app build ships a newer helper; compare contents.
         if let bundled = try? Data(contentsOf: bundledHelper),
            let installed = try? Data(contentsOf: URL(fileURLWithPath: Paths.installedHelper)), bundled != installed {

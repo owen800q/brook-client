@@ -202,8 +202,9 @@ final class Engine {
         guard let brookPath = Paths.brook else { return .failure(Failure(message: "brook binary not found")) }
 
         switch Helper.status() {
-        case .notInstalled: return .failure(Failure(message: "Network helper not installed (menu → Install Network Helper…)"))
-        case .outdated: return .failure(Failure(message: "Network helper is outdated (menu → Install Network Helper…)"))
+        case .notInstalled: return .failure(Failure(message: "Network helper not installed"))
+        case .notAuthorized: return .failure(Failure(message: "Network helper permission is not active; please reinstall the helper"))
+        case .outdated: return .failure(Failure(message: "Network helper is outdated; please reinstall the helper"))
         case .ready: break
         }
 
