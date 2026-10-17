@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/AppIcon.png" width="128" alt="Brook Client icon"></p>
+
 # Brook Client
 
 A lightweight macOS menu-bar client for [Brook](https://github.com/txthinking/brook) that **keeps your home network (LAN) outside the VPN**, so tools like Samsung's `sdb` can reach your TV while the VPN is connected.
@@ -25,14 +27,26 @@ LAN traffic is routed by the kernel directly; it never reaches any userspace sta
 | `brook connect` | ~15 MB RSS |
 | `tun2socks` (TUN mode only) | ~15–20 MB RSS |
 
+## Download
+
+Grab `BrookClient-<version>-macOS-universal.dmg` (or `.zip`) from [Releases](https://github.com/owen800q/brook-client/releases). It is a universal build for Apple silicon and Intel Macs, macOS 13 or later, with brook and tun2socks bundled.
+
+The app is ad-hoc signed, not notarized, so Gatekeeper blocks the first launch. Drag it to Applications, then either right-click it and choose **Open**, or run:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Brook Client.app"
+```
+
 ## Build & install
 
 ```sh
-brew install brook
-scripts/build-app.sh --install     # → ~/Applications/Brook Client.app (downloads tun2socks v2.7.0 once)
-swift test                         # 58 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
+scripts/build-app.sh --install     # universal app → ~/Applications/Brook Client.app
+scripts/build-app.sh --release     # also packages build/BrookClient-<version>-macOS-universal.{zip,dmg}
+swift test                         # 68 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
 Tests/docker/run.sh                # end-to-end data-path lab in Docker (doesn't touch the host network)
 ```
+
+The build downloads the official brook (v20270101) and tun2socks (v2.7.0) release binaries for both architectures once, into `vendor/`, and merges them with `lipo`. Set `VERSION=x.y.z` to override the version, which defaults to today's date. To regenerate the icon from `assets/icon-source.png`, run `python scripts/make-icon.py` with a Python that has Pillow.
 
 `Tests/docker` builds three isolated networks: a home LAN with a fake TV on `:26101`, a WAN with a brook server, and an "internet" that only the server can reach. It runs the real brook and tun2socks with the same route plan as the helper, using Linux `ip` instead of BSD `route`. It checks the following:
 - Internet TCP and UDP exit via the brook server.
