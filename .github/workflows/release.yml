@@ -1,0 +1,50 @@
+name: Release
+
+# Every commit that lands on main (direct push or merged PR) builds and publishes a release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick version
+        id: version
+        # YYYY.MMDD.<run number>: three integers, always increasing, unique per run.
+        run: echo "version=$(date -u +%Y.%m%d).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache brook/tun2socks downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/dl
+          key: vendor-${{ hashFiles('scripts/build-app.sh') }}
+
+      - name: Test
+        run: swift test
+
+      - name: Build and package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build-app.sh --release
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          base=build/BrookClient-$VERSION-macOS-universal
+          gh release create "v$VERSION" "$base.dmg" "$base.zip" "$base.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "Brook Client $VERSION" \
+            --generate-notes
