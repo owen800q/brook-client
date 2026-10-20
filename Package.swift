@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "BrookClient",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v12)],
     targets: [
         // Pure, side-effect-free logic: link parsing, CIDRs, route planning, config.
         .target(name: "BrookCore"),

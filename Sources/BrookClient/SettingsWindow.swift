@@ -1,6 +1,5 @@
 import AppKit
 import BrookCore
-import ServiceManagement
 import SwiftUI
 
 @MainActor
@@ -30,7 +29,7 @@ final class SettingsModel: ObservableObject {
         connectOnLaunch = c.connectOnLaunch
         blockIPv6 = c.blockIPv6
         udpOverTCP = c.udpOverTCP
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        launchAtLogin = LoginItem.isEnabled
     }
 
     var config: AppConfig {
@@ -84,9 +83,9 @@ final class SettingsModel: ObservableObject {
 
     func applyLaunchAtLogin() {
         do {
-            if launchAtLogin { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            try LoginItem.setEnabled(launchAtLogin)
         } catch {
-            launchAtLogin = SMAppService.mainApp.status == .enabled
+            launchAtLogin = LoginItem.isEnabled
         }
     }
 }
@@ -166,10 +165,17 @@ struct SettingsView: View {
                     .disabled(!model.errors.isEmpty)
             }
         }
-        .formStyle(.grouped)
+        .groupedFormStyle()
         .frame(width: 640)
         .frame(minHeight: 760)
         .onAppear { model.refreshHelper() }
+    }
+}
+
+private extension View {
+    /// `.formStyle(.grouped)` only exists on macOS 13+; macOS 12 keeps the default style.
+    @ViewBuilder func groupedFormStyle() -> some View {
+        if #available(macOS 13.0, *) { formStyle(.grouped) } else { padding() }
     }
 }
 

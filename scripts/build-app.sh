@@ -31,8 +31,8 @@ chmod 755 vendor/brook vendor/tun2socks
 # --- build ------------------------------------------------------------------
 bins=
 for arch in arm64 x86_64; do
-	swift build -c release --triple "$arch-apple-macosx13.0"
-	bins="$bins $(swift build -c release --triple "$arch-apple-macosx13.0" --show-bin-path)/BrookClient"
+	swift build -c release --triple "$arch-apple-macosx12.0"
+	bins="$bins $(swift build -c release --triple "$arch-apple-macosx12.0" --show-bin-path)/BrookClient"
 done
 
 APP="build/Brook Client.app"
@@ -59,7 +59,7 @@ cat >"$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>$VERSION</string>
 	<key>CFBundleVersion</key><string>$VERSION</string>
-	<key>LSMinimumSystemVersion</key><string>13.0</string>
+	<key>LSMinimumSystemVersion</key><string>12.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
 </dict>
