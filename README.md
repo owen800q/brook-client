@@ -29,7 +29,7 @@ LAN traffic is routed by the kernel directly; it never reaches any userspace sta
 
 ## Download
 
-Grab `BrookClient-<version>-macOS-universal.dmg` (or `.zip`) from [Releases](https://github.com/owen800q/brook-client/releases). It is a universal build for Apple silicon and Intel Macs, macOS 12 or later, with brook and tun2socks bundled.
+Grab `BrookClient-<version>-macOS-universal.dmg` (or `.zip`) from [Releases](https://github.com/owen800q/brook-client/releases). It is a universal build for Apple silicon and Intel Macs, macOS 12 or later, with brook and tun2socks bundled. A new release is published automatically for every commit to `main` (see `.github/workflows/release.yml`), versioned `YYYY.MMDD.<build number>`.
 
 The app is ad-hoc signed, not notarized, so Gatekeeper blocks the first launch. Drag it to Applications, then either right-click it and choose **Open**, or run:
 
