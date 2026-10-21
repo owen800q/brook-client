@@ -14,5 +14,10 @@ let package = Package(
             dependencies: ["BrookCore"],
             resources: [.copy("Fixtures")]
         ),
+        // Hosts the settings view and checks its layout at several window sizes.
+        .testTarget(
+            name: "BrookClientTests",
+            dependencies: ["BrookClient"]
+        ),
     ]
 )

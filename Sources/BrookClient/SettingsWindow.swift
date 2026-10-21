@@ -100,11 +100,18 @@ struct SettingsView: View {
         // The form scrolls; the Save/Cancel bar stays pinned at the bottom so it is
         // always reachable, even on short screens like a 13" MacBook Air.
         VStack(spacing: 0) {
-            scrollingForm
+            ScrollView(.vertical) {
+                form
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Divider()
             footer
         }
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 700)
+        // The ideal width sets the window's opening width; long text would otherwise ask for
+        // a window as wide as the screen.
+        .frame(minWidth: SettingsLayout.minWidth, idealWidth: SettingsLayout.idealWidth, maxWidth: .infinity,
+               minHeight: SettingsLayout.minHeight, maxHeight: .infinity)
         .onAppear { model.refreshHelper() }
     }
 
@@ -132,83 +139,133 @@ struct SettingsView: View {
         .background(.bar)
     }
 
-    @ViewBuilder private var scrollingForm: some View {
-        // `.formStyle(.grouped)` (macOS 13+) scrolls on its own; on macOS 12 a plain
-        // Form does not, so wrap it in a ScrollView there.
-        if #available(macOS 13.0, *) {
-            form.formStyle(.grouped)
-        } else {
-            ScrollView { form.padding() }
-        }
-    }
-
+    // A plain stack rather than `Form`: on macOS 12 a Form lays out at its unwrapped width and
+    // clips on both sides, and macOS 13+ draws it differently, so CI (macOS 15) never saw the bug.
+    // One layout on every version keeps the CI layout test meaningful.
     private var form: some View {
-        Form {
-            Section("Servers") {
+        VStack(alignment: .leading, spacing: 20) {
+            section("Servers") {
                 ForEach(model.profiles.indices, id: \.self) { i in
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(spacing: 8) {
                         Button { model.selectedIndex = i } label: {
                             Image(systemName: model.selectedIndex == i ? "largecircle.fill.circle" : "circle")
                                 .foregroundStyle(model.selectedIndex == i ? Color.accentColor : Color.secondary)
                         }
                         .buttonStyle(.borderless)
                         .help("Use this server")
-                        TextField("Name", text: $model.profiles[i].name).frame(width: 110)
+                        TextField("Name", text: $model.profiles[i].name)
+                            .frame(width: 100)
+                        // Bound the width: an unbounded field grows to fit the whole link.
                         TextField("brook://…", text: $model.profiles[i].link)
                             .font(.system(.body, design: .monospaced))
+                            .frame(minWidth: 160, maxWidth: .infinity)
                         Button(role: .destructive) { model.removeProfile(i) } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
+                            .help("Remove this server")
                     }
                 }
-                Button("Add Server (pastes a brook:// link from the clipboard)") { model.addProfile() }
+                Button("Add Server") { model.addProfile() }
+                    .help("Pastes a brook:// link from the clipboard")
+                caption("Copy a brook:// link first; Add Server pastes it from the clipboard.")
             }
 
-            Section("Connection") {
-                Picker("Mode", selection: $model.mode) {
-                    Text("Full device (TUN)").tag(ConnectionMode.tun)
-                    Text("System proxy only").tag(ConnectionMode.proxy)
+            section("Connection") {
+                field("Mode") {
+                    Picker("Mode", selection: $model.mode) {
+                        Text("Full device (TUN)").tag(ConnectionMode.tun)
+                        Text("System proxy only").tag(ConnectionMode.proxy)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
-                .pickerStyle(.segmented)
-                Text(model.mode == .tun
+                caption(model.mode == .tun
                     ? "All traffic goes through Brook except the ranges below, which go straight to your router — so LAN devices (TV, NAS, printer, sdb) keep working."
                     : "Only apps that honour the macOS proxy use Brook. Command-line tools like sdb are never proxied.")
-                    .font(.caption).foregroundStyle(.secondary)
-                Toggle("UDP over TCP (needed if your server's firewall blocks UDP — otherwise DNS fails)", isOn: $model.udpOverTCP)
-                Toggle("Block public IPv6 while connected (prevents leaks; LAN IPv6 unaffected)", isOn: $model.blockIPv6)
+                toggle("UDP over TCP (needed if your server's firewall blocks UDP — otherwise DNS fails)", isOn: $model.udpOverTCP)
+                toggle("Block public IPv6 while connected (prevents leaks; LAN IPv6 unaffected)", isOn: $model.blockIPv6)
                     .disabled(model.mode != .tun)
-                TextField("DNS while connected (TUN)", text: $model.dnsText)
-                    .help("Queried through the tunnel. Leave empty to keep your current DNS.")
-                HStack {
-                    TextField("SOCKS5 port", value: $model.socksPort, format: .number.grouping(.never))
-                    TextField("HTTP port", value: $model.httpPort, format: .number.grouping(.never))
+                field("DNS while connected (TUN)") {
+                    TextField("8.8.8.8, 1.1.1.1", text: $model.dnsText)
+                        .help("Queried through the tunnel. Leave empty to keep your current DNS.")
+                }
+                HStack(alignment: .top, spacing: 12) {
+                    field("SOCKS5 port") {
+                        TextField("1080", value: $model.socksPort, format: .number.grouping(.never))
+                    }
+                    field("HTTP port") {
+                        TextField("1081", value: $model.httpPort, format: .number.grouping(.never))
+                    }
                 }
             }
 
-            Section("Bypass VPN for (one IPv4 address or CIDR per line)") {
+            section("Bypass VPN for") {
+                caption("One IPv4 address or CIDR per line.")
                 TextEditor(text: $model.bypassText)
                     .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 90)
+                    .frame(height: 110)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.3)))
                 Button("Reset to private networks") { model.bypassText = AppConfig.defaultBypass.joined(separator: "\n") }
             }
 
-            Section("General") {
-                Toggle("Connect when the app starts", isOn: $model.connectOnLaunch)
-                Toggle("Launch at login", isOn: $model.launchAtLogin)
+            section("General") {
+                toggle("Connect when the app starts", isOn: $model.connectOnLaunch)
+                toggle("Launch at login", isOn: $model.launchAtLogin)
                     .onChange(of: model.launchAtLogin) { _ in model.applyLaunchAtLogin() }
                 HStack {
-                    Text("Network helper: \(model.helperStatus)")
-                    Spacer()
+                    wrapping("Network helper: \(model.helperStatus)")
                     Button(model.helperReady ? "Reinstall" : "Install…", action: onInstallHelper)
                 }
             }
 
             if !model.errors.isEmpty {
-                Section {
-                    ForEach(model.errors, id: \.self) { Text($0).foregroundStyle(.red).font(.caption) }
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(model.errors, id: \.self) { wrapping($0).foregroundStyle(.red).font(.caption) }
                 }
             }
         }
     }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline)
+            VStack(alignment: .leading, spacing: 10) { content() }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
+        }
+    }
+
+    /// A label above its control, so long labels never push the control off the window.
+    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            wrapping(label)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func toggle(_ label: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) { wrapping(label) }
+    }
+
+    private func caption(_ s: String) -> some View {
+        wrapping(s).font(.caption).foregroundStyle(.secondary)
+    }
+
+    /// Text that wraps to the available width instead of asking for one long line.
+    private func wrapping(_ s: String) -> some View {
+        Text(s)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Window size limits. The minimum width fits the name and link fields side by side; text wraps.
+private enum SettingsLayout {
+    static let minWidth: CGFloat = 480
+    static let idealWidth: CGFloat = 600
+    static let minHeight: CGFloat = 320
+    static let idealHeight: CGFloat = 760
 }
 
 @MainActor
@@ -231,14 +288,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         })
         let hosting = NSHostingController(rootView: view)
         if #available(macOS 13.0, *) {
-            // Only enforce the minimum size; let the window be sized to the screen below.
+            // Only enforce the minimum size; the initial size is set below.
             hosting.sizingOptions = [.minSize]
         }
         let w = NSWindow(contentViewController: hosting)
         w.title = "Brook Client Settings"
         w.styleMask = [.titled, .closable, .resizable]
-        w.contentMinSize = NSSize(width: 560, height: 420)
-        w.setContentSize(Self.fittedContentSize())
+        w.contentMinSize = NSSize(width: SettingsLayout.minWidth, height: SettingsLayout.minHeight)
+        w.setContentSize(Self.initialContentSize())
         w.isReleasedWhenClosed = false
         w.delegate = self
         window = w
@@ -252,12 +309,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func refreshHelperStatus() { model.refreshHelper() }
 
-    /// Preferred size, shrunk to fit the screen's usable area (minus menu bar, Dock and title bar).
-    private static func fittedContentSize() -> NSSize {
-        let preferred = NSSize(width: 640, height: 700)
-        guard let visible = NSScreen.main?.visibleFrame else { return preferred }
-        return NSSize(width: min(preferred.width, visible.width - 40),
-                      height: max(420, min(preferred.height, visible.height - 60)))
+    /// The ideal size, kept within the screen's usable area (minus menu bar, Dock and title bar).
+    /// The form scrolls when it is taller than the window.
+    private static func initialContentSize() -> NSSize {
+        let ideal = NSSize(width: SettingsLayout.idealWidth, height: SettingsLayout.idealHeight)
+        guard let visible = NSScreen.main?.visibleFrame else { return ideal }
+        return NSSize(width: max(min(ideal.width, visible.width - 40), SettingsLayout.minWidth),
+                      height: max(min(ideal.height, visible.height - 60), SettingsLayout.minHeight))
     }
 
     func windowWillClose(_ notification: Notification) {

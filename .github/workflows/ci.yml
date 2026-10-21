@@ -1,0 +1,37 @@
+name: CI
+
+# Build and test every branch and pull request. Releases are published by release.yml on main.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        env:
+          # Settings window screenshots at several sizes, uploaded below.
+          SNAPSHOT_DIR: ${{ github.workspace }}/build/snapshots
+        run: swift test
+
+      - name: Upload settings window screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-window-snapshots
+          path: build/snapshots
+          if-no-files-found: ignore
