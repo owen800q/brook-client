@@ -164,7 +164,7 @@ private final class FakeProxy: @unchecked Sendable {
 
     init(reply: String) throws {
         self.reply = reply
-        fd = socket(AF_INET, SOCK_STREAM, 0)
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
         var a = sockaddr_in()
         a.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
         a.sin_family = sa_family_t(AF_INET)
@@ -173,6 +173,7 @@ private final class FakeProxy: @unchecked Sendable {
         listen(fd, 16)
         var len = socklen_t(MemoryLayout<sockaddr_in>.size)
         _ = withUnsafeMutablePointer(to: &a) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &len) } }
+        self.fd = fd
         port = Int(UInt16(bigEndian: a.sin_port))
         Thread { [self] in
             while true {
