@@ -144,7 +144,8 @@ import Testing
         // A local Px/cntlm must never get a host route via the gateway.
         let local = try TunnelPlan(serverIPs: ["127.0.0.1"], gateway: gw, bypass: [], dns: [], socksPort: 1080, watchPID: 1,
                                    allowNoServer: true)
-        #expect(!local.helperArguments.contains("--server"))
+        #expect(local.helperArguments.contains("local"))
+        #expect(!local.helperArguments.contains("127.0.0.1"))
         #expect(throws: PlanError.noServerAddress) {
             try TunnelPlan(serverIPs: ["127.0.0.1"], gateway: gw, bypass: [], dns: [], socksPort: 1080, watchPID: 1)
         }

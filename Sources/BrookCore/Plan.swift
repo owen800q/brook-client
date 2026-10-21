@@ -65,6 +65,8 @@ public struct TunnelPlan: Equatable {
 
         var args = ["up", "--socks", String(socksPort), "--gateway", gateway.router, "--interface", gateway.interface]
         for s in servers { args += ["--server", s] }
+        // Explicit, so the helper can still reject a forgotten --server.
+        if servers.isEmpty { args += ["--server", "local"] }
         for c in try parseBypass(bypass) { args += [c.isLinkScoped ? "--link" : "--net", c.description] }
         for d in dns { args += ["--dns", d] }
         if blockIPv6 { args += ["--ipv6", "block"] }

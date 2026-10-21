@@ -78,11 +78,9 @@ private let validUp = [
     }
 
     /// Behind a local HTTP proxy (Px/cntlm on 127.0.0.1) there is no remote address to route
-    /// outside the tunnel, so `up` must work without --server.
-    @Test func upWithoutServerForLocalHTTPProxy() throws {
-        let args = validUp.enumerated().filter { i, a in
-            !(a == "--server" || (i > 0 && validUp[i - 1] == "--server"))
-        }.map(\.element)
+    /// outside the tunnel; `--server local` says so explicitly (a missing --server is still rejected).
+    @Test func upWithLocalServerForLocalHTTPProxy() throws {
+        let args = validUp.map { $0 == "5.6.7.8" ? "local" : $0 }
         let r = try runHelper(args, stateDir: freshStateDir())
         #expect(r.status == 0, "stderr: \(r.stderr)")
         #expect(!r.commands.contains { $0.hasPrefix("route -n add -host") })

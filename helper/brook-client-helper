@@ -5,7 +5,7 @@
 # allowed (NOPASSWD, this exact path only) via /etc/sudoers.d/com.brookclient.
 # Every argument is validated here; the GUI is not trusted.
 #
-#   up       --socks PORT --gateway IP --interface IF [--server IP...] [--net CIDR...]
+#   up       --socks PORT --gateway IP --interface IF --server IP|local... [--net CIDR...]
 #            [--link CIDR...] [--dns IP...] [--ipv6 block] --watch PID
 #   proxy-on --interface IF --http PORT --socks PORT [--bypass CIDR...] --watch PID
 #   down
@@ -220,14 +220,16 @@ start_watch() { # app_pid [tun2socks_pid]
 # ---------------------------------------------------------------- up
 
 do_up() {
-	_socks="" _gw="" _if="" _watch="" _servers="" _nets="" _links="" _dns="" _v6block=0
+	_socks="" _gw="" _if="" _watch="" _servers="" _local=0 _nets="" _links="" _dns="" _v6block=0
 	while [ $# -gt 0 ]; do
 		[ $# -ge 2 ] || usage "missing value for $1"
 		case $1 in
 		--socks) is_port "$2" || usage "bad port: $2"; _socks=$2 ;;
 		--gateway) is_route_ip "$2" || usage "bad gateway: $2"; _gw=$2 ;;
 		--interface) is_iface "$2" || usage "bad interface: $2"; _if=$2 ;;
-		--server) is_route_ip "$2" || usage "bad server: $2"; _servers="$_servers $2" ;;
+		--server)
+			# "local": brook reaches the internet via a proxy on this Mac, so no host route is needed.
+			if [ "$2" = local ]; then _local=1; else is_route_ip "$2" || usage "bad server: $2"; _servers="$_servers $2"; fi ;;
 		--net) is_bypass_cidr "$2" || usage "bad cidr: $2"; _nets="$_nets $2" ;;
 		--link) is_bypass_cidr "$2" || usage "bad cidr: $2"; _links="$_links $2" ;;
 		--dns) is_ipv4 "$2" || usage "bad dns: $2"; _dns="$_dns $2" ;;
@@ -237,9 +239,8 @@ do_up() {
 		esac
 		shift 2
 	done
-	# --server may be absent when brook reaches the internet through a proxy on this Mac (127.0.0.1).
-	[ -n "$_socks" ] && [ -n "$_gw" ] && [ -n "$_if" ] && [ -n "$_watch" ] ||
-		usage "up requires --socks --gateway --interface --watch"
+	[ -n "$_socks" ] && [ -n "$_gw" ] && [ -n "$_if" ] && { [ -n "$_servers" ] || [ $_local = 1 ]; } && [ -n "$_watch" ] ||
+		usage "up requires --socks --gateway --interface --server --watch"
 	[ $DRY = 1 ] || [ -x "$TUN2SOCKS" ] || { log "missing $TUN2SOCKS"; exit 1; }
 
 	do_down
