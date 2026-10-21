@@ -26,14 +26,20 @@ import Testing
             view.layoutSubtreeIfNeeded()
 
             let overflowing = Self.overflowingViews(in: view)
-            #expect(overflowing.isEmpty, "\(name): \(overflowing.joined(separator: "; "))")
+            let summary = overflowing.prefix(5).joined(separator: "; ")
+            #expect(overflowing.isEmpty, "\(name): \(overflowing.count) views overflow, e.g. \(summary)")
             try Self.savePNG(view, name: name)
         }
     }
 
     private func makeWindow(size: CGSize) -> NSWindow {
+        // A real server link, which is what made the window clip: an unbounded link field grows
+        // to fit the whole string.
+        var config = AppConfig()
+        config.profiles = [Profile(name: "SGP", link: Self.longLink)]
+        config.selectedIndex = 0
         let view = SettingsView(
-            model: SettingsModel(AppConfig()),
+            model: SettingsModel(config),
             onSave: { _ in },
             onCancel: {},
             onInstallHelper: {}
@@ -50,6 +56,9 @@ import Testing
         window.layoutIfNeeded()
         return window
     }
+
+    private static let longLink =
+        "brook://server?server=54.169.142.26%3A9999&password=0123456789abcdef0123456789abcdef"
 
     /// Views whose horizontal extent falls outside the root. The form scrolls vertically only,
     /// so anything wider than the window is clipped and unreachable.
