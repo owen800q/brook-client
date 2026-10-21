@@ -143,13 +143,30 @@ public final class ConnectRelay: @unchecked Sendable {
         guard fd >= 0 else { return .failure(.unreachable(String(cString: strerror(errno)))) }
         noSigPipe(fd)
         setTimeout(fd, handshakeTimeout)
-        let rc = withUnsafePointer(to: &addr) {
+        // connect() ignores SO_SNDTIMEO on macOS and would wait ~75 s for a firewall that silently
+        // drops packets, so connect non-blocking and poll with our own deadline.
+        let flags = fcntl(fd, F_GETFL)
+        _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+        var rc = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
         }
-        if rc != 0 {
-            let e = errno
+        var e = rc == 0 ? 0 : errno
+        if rc != 0, e == EINPROGRESS {
+            var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+            repeat { rc = poll(&pfd, 1, Int32(handshakeTimeout * 1000)) } while rc < 0 && errno == EINTR
+            if rc == 0 {
+                e = ETIMEDOUT
+            } else {
+                var soErr: Int32 = 0
+                var len = socklen_t(MemoryLayout<Int32>.size)
+                getsockopt(fd, SOL_SOCKET, SO_ERROR, &soErr, &len)
+                e = rc < 0 ? errno : soErr
+            }
+        }
+        _ = fcntl(fd, F_SETFL, flags)
+        if e != 0 {
             close(fd)
-            return .failure(e == ETIMEDOUT || e == EAGAIN ? .timeout
+            return .failure(e == ETIMEDOUT ? .timeout
                 : .unreachable("\(proxy.host):\(proxy.port) — \(String(cString: strerror(e)))"))
         }
         guard writeAll(fd, proxy.connectRequest(host: targetHost, port: targetPort)) else {

@@ -221,7 +221,7 @@ struct SettingsView: View {
                 }
                 Button("Use macOS Proxy Settings") { model.detectSystemProxy() }
                     .help("Copy the HTTPS proxy configured in System Settings › Network")
-                caption("For networks that only reach the internet through an HTTP proxy. Brook then connects via HTTP CONNECT: use a wssserver link on port 443. Write user:password@host:port for a proxy login; for NTLM/Kerberos, run Px or cntlm and enter 127.0.0.1:3128.")
+                caption("For networks that only reach the internet through an HTTP proxy. Brook then connects via HTTP CONNECT: use a wssserver link on port 443. Write user:password@host:port for a proxy login; for NTLM/Kerberos, run Px or cntlm and enter 127.0.0.1:3128 (in TUN mode, also add the company proxy's IP to the bypass list and clear DNS).")
                 if !model.proxyDetectNote.isEmpty { caption(model.proxyDetectNote) }
                 ForEach(model.warnings, id: \.self) { wrapping($0).font(.caption).foregroundStyle(.orange) }
             }

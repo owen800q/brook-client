@@ -82,6 +82,7 @@ is_tun() { case $1 in utun[0-9] | utun[0-9][0-9] | utun[0-9][0-9][0-9]) return 0
 # read back from the state dir.
 is_service() { case $1 in '' | *[!A-Za-z0-9\ ./_\(\)-]*) return 1 ;; esac; }
 is_bypass_entry() { case $1 in '' | *[!A-Za-z0-9.*/:_\<\>-]*) return 1 ;; esac; }
+is_proxy_host() { case $1 in '' | -* | *[!A-Za-z0-9.:_-]*) return 1 ;; esac; [ ${#1} -le 253 ]; }
 is_dns_entry() { [ "$1" = Empty ] && return 0; case $1 in '' | *[!0-9A-Fa-f:.]*) return 1 ;; esac; }
 
 # Is PID still the process we started (guards against PID reuse before killing as root)?
@@ -111,6 +112,27 @@ current_bypass() {
 	[ $DRY = 1 ] && { echo Empty; return; }
 	_out=$(networksetup -getproxybypassdomains "$1" 2>/dev/null)
 	case $_out in *"aren't any"* | '') echo Empty ;; *) echo $_out ;; esac
+}
+
+# Prints "<on|off> <host> <port>" for one proxy kind (web, secureweb, socksfirewall), so a
+# company proxy configured in macOS is put back on disconnect instead of being switched off.
+current_proxy() { # service kind
+	if [ $DRY = 1 ]; then echo "${BROOK_HELPER_PREV_PROXY:-off - 0}"; return; fi
+	networksetup -get"$2"proxy "$1" 2>/dev/null | awk '
+		/^Enabled:/ { on = ($2 == "Yes") ? "on" : "off" }
+		/^Server:/ { host = $2 }
+		/^Port:/ { port = $2 }
+		END { if (host == "") host = "-"; if (port == "") port = 0; print (on == "" ? "off" : on), host, port }'
+}
+
+restore_proxy() { # service kind
+	_line=$(grep "^$2 " "$STATE_DIR/proxy_prev" 2>/dev/null)
+	set -- "$1" "$2" $_line
+	if [ "${4:-}" = on ] && is_proxy_host "${5:-}" && is_port "${6:-}"; then
+		run networksetup -set"$2"proxy "$1" "$5" "$6"
+	else
+		run networksetup -set"$2"proxystate "$1" off
+	fi
 }
 
 free_tun() {
@@ -159,9 +181,7 @@ do_down() {
 		run killall -HUP mDNSResponder
 	fi
 	if [ -n "$_svc" ] && grep -q '^proxy$' "$STATE"; then
-		run networksetup -setwebproxystate "$_svc" off
-		run networksetup -setsecurewebproxystate "$_svc" off
-		run networksetup -setsocksfirewallproxystate "$_svc" off
+		for _kind in web secureweb socksfirewall; do restore_proxy "$_svc" "$_kind"; done
 		if [ -f "$STATE_DIR/bypass_prev" ]; then
 			_prev=$(cat "$STATE_DIR/bypass_prev")
 			_ok=1
@@ -195,7 +215,7 @@ do_down() {
 		esac
 	done <"$STATE"
 
-	rm -f "$STATE" "$STATE_DIR/service" "$STATE_DIR/dns_prev" "$STATE_DIR/bypass_prev"
+	rm -f "$STATE" "$STATE_DIR/service" "$STATE_DIR/dns_prev" "$STATE_DIR/bypass_prev" "$STATE_DIR/proxy_prev"
 	return 0
 }
 
@@ -338,6 +358,7 @@ do_proxy_on() {
 	record mode proxy
 	echo "$_svc" >"$STATE_DIR/service"
 	current_bypass "$_svc" >"$STATE_DIR/bypass_prev"
+	for _kind in web secureweb socksfirewall; do echo "$_kind $(current_proxy "$_svc" "$_kind")"; done >"$STATE_DIR/proxy_prev"
 	record proxy
 
 	run networksetup -setwebproxy "$_svc" 127.0.0.1 "$_http"
