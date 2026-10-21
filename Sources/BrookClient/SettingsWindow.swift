@@ -104,7 +104,7 @@ struct SettingsView: View {
             Divider()
             footer
         }
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 700)
+        .frame(minWidth: SettingsLayout.minWidth, minHeight: SettingsLayout.minHeight)
         .onAppear { model.refreshHelper() }
     }
 
@@ -154,8 +154,11 @@ struct SettingsView: View {
                         .buttonStyle(.borderless)
                         .help("Use this server")
                         TextField("Name", text: $model.profiles[i].name).frame(width: 110)
+                        // Bound the width: an unbounded field grows to fit the whole link and
+                        // pushes the form wider than the window.
                         TextField("brook://…", text: $model.profiles[i].link)
                             .font(.system(.body, design: .monospaced))
+                            .frame(minWidth: 240, idealWidth: 320, maxWidth: .infinity)
                         Button(role: .destructive) { model.removeProfile(i) } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
                     }
@@ -211,6 +214,13 @@ struct SettingsView: View {
     }
 }
 
+/// Smallest size the settings window may shrink to. The width fits the name and link fields
+/// side by side; the rest of the layout is sized by its content.
+private enum SettingsLayout {
+    static let minWidth: CGFloat = 480
+    static let minHeight: CGFloat = 320
+}
+
 @MainActor
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
@@ -231,14 +241,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         })
         let hosting = NSHostingController(rootView: view)
         if #available(macOS 13.0, *) {
-            // Only enforce the minimum size; let the window be sized to the screen below.
+            // Only enforce the minimum size; the initial size is derived from the content below.
             hosting.sizingOptions = [.minSize]
         }
         let w = NSWindow(contentViewController: hosting)
         w.title = "Brook Client Settings"
         w.styleMask = [.titled, .closable, .resizable]
-        w.contentMinSize = NSSize(width: 560, height: 420)
-        w.setContentSize(Self.fittedContentSize())
+        w.contentMinSize = NSSize(width: SettingsLayout.minWidth, height: SettingsLayout.minHeight)
+        w.setContentSize(Self.initialContentSize(fitting: hosting.view.fittingSize))
         w.isReleasedWhenClosed = false
         w.delegate = self
         window = w
@@ -252,12 +262,13 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func refreshHelperStatus() { model.refreshHelper() }
 
-    /// Preferred size, shrunk to fit the screen's usable area (minus menu bar, Dock and title bar).
-    private static func fittedContentSize() -> NSSize {
-        let preferred = NSSize(width: 640, height: 700)
-        guard let visible = NSScreen.main?.visibleFrame else { return preferred }
-        return NSSize(width: min(preferred.width, visible.width - 40),
-                      height: max(420, min(preferred.height, visible.height - 60)))
+    /// The form's natural size, kept within the minimum and within the screen's usable area
+    /// (minus menu bar, Dock and title bar). The form scrolls when it is taller than the screen.
+    private static func initialContentSize(fitting: NSSize) -> NSSize {
+        guard let visible = NSScreen.main?.visibleFrame else { return fitting }
+        let width = min(max(fitting.width, SettingsLayout.minWidth), visible.width - 40)
+        let height = min(max(fitting.height, SettingsLayout.minHeight), visible.height - 60)
+        return NSSize(width: width, height: height)
     }
 
     func windowWillClose(_ notification: Notification) {
