@@ -93,16 +93,66 @@ final class SettingsModel: ObservableObject {
 struct SettingsView: View {
     @ObservedObject var model: SettingsModel
     let onSave: (AppConfig) -> Void
+    let onCancel: () -> Void
     let onInstallHelper: () -> Void
 
     var body: some View {
+        // The form scrolls; the Save/Cancel bar stays pinned at the bottom so it is
+        // always reachable, even on short screens like a 13" MacBook Air.
+        VStack(spacing: 0) {
+            scrollingForm
+            Divider()
+            footer
+        }
+        .frame(minWidth: 560, idealWidth: 640, minHeight: 420, idealHeight: 700)
+        .onAppear { model.refreshHelper() }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            if let first = model.errors.first {
+                Label(model.errors.count > 1 ? "\(first) (+\(model.errors.count - 1) more)" : first,
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(2)
+                    .help(model.errors.joined(separator: "\n"))
+            }
+            Spacer(minLength: 0)
+            Button("Cancel", action: onCancel)
+                .keyboardShortcut(.cancelAction)
+                .controlSize(.large)
+            Button("Save") { onSave(model.config) }
+                .keyboardShortcut(.defaultAction)
+                .controlSize(.large)
+                .disabled(!model.errors.isEmpty)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    @ViewBuilder private var scrollingForm: some View {
+        // `.formStyle(.grouped)` (macOS 13+) scrolls on its own; on macOS 12 a plain
+        // Form does not, so wrap it in a ScrollView there.
+        if #available(macOS 13.0, *) {
+            form.formStyle(.grouped)
+        } else {
+            ScrollView { form.padding() }
+        }
+    }
+
+    private var form: some View {
         Form {
             Section("Servers") {
                 ForEach(model.profiles.indices, id: \.self) { i in
                     HStack(alignment: .firstTextBaseline) {
-                        Image(systemName: model.selectedIndex == i ? "largecircle.fill.circle" : "circle")
-                            .onTapGesture { model.selectedIndex = i }
-                            .help("Use this server")
+                        Button { model.selectedIndex = i } label: {
+                            Image(systemName: model.selectedIndex == i ? "largecircle.fill.circle" : "circle")
+                                .foregroundStyle(model.selectedIndex == i ? Color.accentColor : Color.secondary)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Use this server")
                         TextField("Name", text: $model.profiles[i].name).frame(width: 110)
                         TextField("brook://…", text: $model.profiles[i].link)
                             .font(.system(.body, design: .monospaced))
@@ -157,25 +207,7 @@ struct SettingsView: View {
                     ForEach(model.errors, id: \.self) { Text($0).foregroundStyle(.red).font(.caption) }
                 }
             }
-
-            HStack {
-                Spacer()
-                Button("Save") { onSave(model.config) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!model.errors.isEmpty)
-            }
         }
-        .groupedFormStyle()
-        .frame(width: 640)
-        .frame(minHeight: 760)
-        .onAppear { model.refreshHelper() }
-    }
-}
-
-private extension View {
-    /// `.formStyle(.grouped)` only exists on macOS 13+; macOS 12 keeps the default style.
-    @ViewBuilder func groupedFormStyle() -> some View {
-        if #available(macOS 13.0, *) { formStyle(.grouped) } else { padding() }
     }
 }
 
@@ -192,12 +224,21 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         let view = SettingsView(model: model, onSave: { [weak self] c in
             onSave(c)
             self?.window?.close()
+        }, onCancel: { [weak self] in
+            self?.window?.close()
         }, onInstallHelper: {
             (NSApp.delegate as? AppDelegate)?.installHelper()
         })
-        let w = NSWindow(contentViewController: NSHostingController(rootView: view))
+        let hosting = NSHostingController(rootView: view)
+        if #available(macOS 13.0, *) {
+            // Only enforce the minimum size; let the window be sized to the screen below.
+            hosting.sizingOptions = [.minSize]
+        }
+        let w = NSWindow(contentViewController: hosting)
         w.title = "Brook Client Settings"
         w.styleMask = [.titled, .closable, .resizable]
+        w.contentMinSize = NSSize(width: 560, height: 420)
+        w.setContentSize(Self.fittedContentSize())
         w.isReleasedWhenClosed = false
         w.delegate = self
         window = w
@@ -210,6 +251,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func refreshHelperStatus() { model.refreshHelper() }
+
+    /// Preferred size, shrunk to fit the screen's usable area (minus menu bar, Dock and title bar).
+    private static func fittedContentSize() -> NSSize {
+        let preferred = NSSize(width: 640, height: 700)
+        guard let visible = NSScreen.main?.visibleFrame else { return preferred }
+        return NSSize(width: min(preferred.width, visible.width - 40),
+                      height: max(420, min(preferred.height, visible.height - 60)))
+    }
 
     func windowWillClose(_ notification: Notification) {
         window?.contentViewController = nil
