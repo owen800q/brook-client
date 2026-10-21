@@ -33,6 +33,9 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var blockIPv6 = true
     /// Tunnel UDP (incl. DNS) inside TCP; needed when the server's firewall drops UDP.
     public var udpOverTCP = true
+    /// Corporate HTTP proxy (HTTP CONNECT) to reach the brook server through, e.g. `proxy.corp:8080`
+    /// or `http://user:pass@proxy.corp:8080`. Empty = connect directly.
+    public var upstreamProxy = ""
 
     public init() {}
 
@@ -49,6 +52,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         connectOnLaunch = try c.decodeIfPresent(Bool.self, forKey: .connectOnLaunch) ?? d.connectOnLaunch
         blockIPv6 = try c.decodeIfPresent(Bool.self, forKey: .blockIPv6) ?? d.blockIPv6
         udpOverTCP = try c.decodeIfPresent(Bool.self, forKey: .udpOverTCP) ?? d.udpOverTCP
+        upstreamProxy = try c.decodeIfPresent(String.self, forKey: .upstreamProxy) ?? d.upstreamProxy
     }
 
     public var selectedProfile: Profile? {
@@ -56,14 +60,26 @@ public struct AppConfig: Codable, Equatable, Sendable {
         return profiles[i]
     }
 
+    /// The parsed upstream proxy, or nil when unset or invalid.
+    public var parsedUpstreamProxy: UpstreamProxy? { (try? UpstreamProxy(parsing: upstreamProxy)) ?? nil }
+
     public func validationErrors() -> [String] {
         var errors: [String] = []
+        var proxyValid = true
+        do { _ = try UpstreamProxy(parsing: upstreamProxy) } catch {
+            proxyValid = false
+            if case let BrookLinkError.invalid(why) = error { errors.append("HTTP proxy: \(why)") }
+        }
+        let viaProxy = proxyValid && parsedUpstreamProxy != nil
         for p in profiles {
             guard let link = try? BrookLink(parsing: p.link) else {
                 errors.append("Server '\(p.name)': invalid brook link")
                 continue
             }
             if link.kind == .socks5 { errors.append("Server '\(p.name)': socks5 links are not supported by brook connect") }
+            if viaProxy, link.kind == .quicserver {
+                errors.append("Server '\(p.name)': QUIC (UDP) cannot pass an HTTP proxy; use a wssserver link")
+            }
         }
         for c in bypassCIDRs where (try? IPv4CIDR(c)) == nil { errors.append("Bypass: '\(c)' is not an IPv4 address/CIDR") }
         for d in dns where !IPv4.isValid(d) { errors.append("DNS: '\(d)' is not an IPv4 address") }
@@ -72,6 +88,15 @@ public struct AppConfig: Codable, Equatable, Sendable {
         }
         if socksPort == httpPort { errors.append("SOCKS5 and HTTP ports must differ") }
         return errors
+    }
+
+    /// Non-blocking advice: most corporate proxies only allow CONNECT to port 443.
+    public func warnings() -> [String] {
+        guard parsedUpstreamProxy != nil else { return [] }
+        return profiles.compactMap { p in
+            guard let link = try? BrookLink(parsing: p.link), link.canUseHTTPProxy, link.dialPort != 443 else { return nil }
+            return "Server '\(p.name)' uses port \(link.dialPort); many company proxies only allow port 443 (wssserver)"
+        }
     }
 }
 

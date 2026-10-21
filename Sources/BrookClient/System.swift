@@ -74,6 +74,19 @@ enum System {
         }
     }
 
+    /// The manual HTTPS (else HTTP) proxy from macOS network settings, skipping our own
+    /// 127.0.0.1 listeners (which System-proxy mode installs there).
+    static func systemHTTPProxy(ignoringLocalPorts own: [Int]) -> (host: String, port: Int)? {
+        guard let dict = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any] else { return nil }
+        for (enable, host, port) in [("HTTPSEnable", "HTTPSProxy", "HTTPSPort"), ("HTTPEnable", "HTTPProxy", "HTTPPort")] {
+            guard (dict[enable] as? NSNumber)?.boolValue == true, let h = dict[host] as? String, !h.isEmpty,
+                  let p = (dict[port] as? NSNumber)?.intValue, (1...65535).contains(p) else { continue }
+            if h == "127.0.0.1" || h == "localhost", own.contains(p) { continue }
+            return (h, p)
+        }
+        return nil
+    }
+
     static func interfaceExists(_ name: String) -> Bool {
         if_nametoindex(name) != 0
     }

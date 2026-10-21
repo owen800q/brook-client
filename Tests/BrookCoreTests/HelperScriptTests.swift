@@ -19,7 +19,7 @@ private let helperPath: String = {
         .appendingPathComponent("helper/brook-client-helper").path
 }()
 
-private func runHelper(_ args: [String], stateDir: URL) throws -> HelperRun {
+private func runHelper(_ args: [String], stateDir: URL, extraEnv: [String: String] = [:]) throws -> HelperRun {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/bin/sh")
     p.arguments = [helperPath] + args
@@ -29,7 +29,7 @@ private func runHelper(_ args: [String], stateDir: URL) throws -> HelperRun {
         "BROOK_HELPER_STATE_DIR": stateDir.path,
         "BROOK_HELPER_TUN": "utun199",
         "BROOK_HELPER_SERVICE": "Wi-Fi",
-    ]
+    ].merging(extraEnv) { _, new in new }
     let out = Pipe(), err = Pipe()
     p.standardOutput = out
     p.standardError = err
@@ -75,6 +75,35 @@ private let validUp = [
         let lanIdx = try #require(cmds.firstIndex(of: "route -n add -net 192.168.0.0/16 192.168.0.1"))
         let catchAll = try #require(cmds.firstIndex(of: "route -n add -net 0.0.0.0/1 -interface utun199"))
         #expect(serverIdx < catchAll && lanIdx < catchAll)
+    }
+
+    /// Behind a local HTTP proxy (Px/cntlm on 127.0.0.1) there is no remote address to route
+    /// outside the tunnel; `--server local` says so explicitly (a missing --server is still rejected).
+    @Test func upWithLocalServerForLocalHTTPProxy() throws {
+        let args = validUp.map { $0 == "5.6.7.8" ? "local" : $0 }
+        let r = try runHelper(args, stateDir: freshStateDir())
+        #expect(r.status == 0, "stderr: \(r.stderr)")
+        #expect(!r.commands.contains { $0.hasPrefix("route -n add -host") })
+        #expect(r.commands.contains("route -n add -net 0.0.0.0/1 -interface utun199"))
+    }
+
+    /// Users behind a company proxy already have it set in macOS; System-proxy mode must put it
+    /// back on disconnect rather than switch proxies off (which would cut their internet).
+    @Test func proxyModeRestoresPreviousCompanyProxy() throws {
+        let dir = try freshStateDir()
+        let on = try runHelper(["proxy-on", "--interface", "en1", "--http", "1081", "--socks", "1080", "--watch", "1"],
+                               stateDir: dir, extraEnv: ["BROOK_HELPER_PREV_PROXY": "on proxy.corp.example.com 8080"])
+        #expect(on.status == 0, "stderr: \(on.stderr)")
+        let down = try runHelper(["down"], stateDir: dir)
+        #expect(down.commands.contains("networksetup -setwebproxy Wi-Fi proxy.corp.example.com 8080"))
+        #expect(down.commands.contains("networksetup -setsecurewebproxy Wi-Fi proxy.corp.example.com 8080"))
+        #expect(!down.commands.contains { $0.contains("proxystate") })
+
+        // Nothing configured before: proxies are switched off as before.
+        let dir2 = try freshStateDir()
+        _ = try runHelper(["proxy-on", "--interface", "en1", "--http", "1081", "--socks", "1080", "--watch", "1"], stateDir: dir2)
+        let down2 = try runHelper(["down"], stateDir: dir2)
+        #expect(down2.commands.contains("networksetup -setsecurewebproxystate Wi-Fi off"))
     }
 
     @Test func downUndoesWhatUpDid() throws {

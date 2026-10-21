@@ -38,6 +38,8 @@ import Testing
         var config = AppConfig()
         config.profiles = [Profile(name: "SGP", link: Self.longLink)]
         config.selectedIndex = 0
+        // A proxy plus a non-443 server also shows the company-network warning text.
+        config.upstreamProxy = "http://alice:secret@proxy.corp.example.com:8080"
         let view = SettingsView(
             model: SettingsModel(config),
             onSave: { _ in },

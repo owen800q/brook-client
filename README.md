@@ -42,7 +42,7 @@ xattr -dr com.apple.quarantine "/Applications/Brook Client.app"
 ```sh
 scripts/build-app.sh --install     # universal app → ~/Applications/Brook Client.app
 scripts/build-app.sh --release     # also packages build/BrookClient-<version>-macOS-universal.{zip,dmg}
-swift test                         # 68 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
+swift test                         # 87 tests: link parsing, CIDRs, routing plan, config, HTTP proxy relay, root helper (dry-run)
 Tests/docker/run.sh                # end-to-end data-path lab in Docker (doesn't touch the host network)
 ```
 
@@ -75,6 +75,24 @@ Modes:
 - **System proxy only**: sets the macOS HTTP/HTTPS/SOCKS proxy (bypass list included). It needs no TUN, and command-line tools are never proxied.
 
 Supported link kinds: `server`, `wsserver`, `wssserver`, `quicserver` (`socks5` links are not usable with `brook connect`).
+
+### Company networks behind an HTTP proxy
+
+Some networks block direct connections to the internet and only allow traffic through an HTTP/HTTPS proxy. To connect from one, open Settings → **Company network** and enter the proxy, for example `proxy.corp.example.com:8080`. **Use macOS Proxy Settings** copies a manually configured proxy from System Settings; auto-config (PAC) proxies aren't read.
+
+brook can't use a proxy itself, so the app runs a small relay on `127.0.0.1`. brook connects to the relay, and the relay opens an `HTTP CONNECT` tunnel through the proxy to your server. All brook traffic, including UDP and DNS, goes inside that one TCP stream. The proxy resolves the server's name, so company DNS doesn't need to resolve it. In TUN mode, the proxy's address (not the server's) is routed outside the tunnel.
+
+| Server link | Through an HTTP proxy |
+|-|-|
+| `wssserver` on port 443 | **Recommended.** It looks like ordinary HTTPS, and most proxies allow CONNECT to 443. |
+| `server`, `wsserver`, or any other port | Works only if the proxy allows CONNECT to that port; many allow only 443. |
+| `quicserver` | Not possible: QUIC is UDP and can't pass an HTTP proxy. |
+
+- **Proxy login:** for Basic auth, write `http://user:password@proxy:8080`. For NTLM/Kerberos (Windows-domain) proxies, run [Px](https://github.com/genotrance/px) or cntlm locally and enter `127.0.0.1:3128`. In TUN mode, Px/cntlm must still reach the company proxy outside the tunnel. Add that proxy's IP to the bypass list if it isn't private (cloud proxies such as Zscaler aren't), and clear the DNS field so its name resolves. Otherwise use System-proxy mode.
+- **System-proxy mode:** the app temporarily replaces the macOS proxy settings and restores your company proxy when you disconnect.
+- **Connection checks:** the app runs a test CONNECT before it reports *Connected*, so a proxy refusal appears as a clear error. A 407 means the proxy wants a login. A 403 means it blocks that host or port.
+- **TLS-inspecting proxies:** some proxies decrypt and re-sign HTTPS. These break `wssserver`'s certificate check unless IT exempts your server's domain.
+- **Intranet sites:** in TUN mode, internal sites stay reachable when their IPs fall in the bypass list, which by default already includes `10/8`, `172.16/12`, and `192.168/16`. Internal hostnames need company DNS, so clear the DNS field to keep it.
 
 ## How it's built
 

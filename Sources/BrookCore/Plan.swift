@@ -45,14 +45,18 @@ func parseBypass(_ raw: [String]) throws -> [IPv4CIDR] {
 public struct TunnelPlan: Equatable {
     public let helperArguments: [String]
 
+    /// `serverIPs` are the addresses brook's connection leaves the Mac for: the brook server, or the
+    /// upstream HTTP proxy when one is set. Loopback addresses (a local Px/cntlm proxy) need no route
+    /// and are skipped; `allowNoServer` permits that to leave the list empty.
     public init(serverIPs: [String], gateway: PhysicalGateway, bypass: [String], dns: [String], socksPort: Int, watchPID: Int32,
-                blockIPv6: Bool = false) throws {
+                blockIPv6: Bool = false, allowNoServer: Bool = false) throws {
         var servers: [String] = []
         for ip in serverIPs where !servers.contains(ip) {
             guard isRoutableIPv4(ip) else { throw PlanError.invalidServerAddress(ip) }
+            if UpstreamProxy.isLoopback(ip) { continue }
             servers.append(ip)
         }
-        guard !servers.isEmpty else { throw PlanError.noServerAddress }
+        guard !servers.isEmpty || allowNoServer else { throw PlanError.noServerAddress }
         guard isRoutableIPv4(gateway.router) else { throw PlanError.invalidGateway(gateway.router) }
         try validatePort(socksPort)
         try validatePID(watchPID)
@@ -61,6 +65,8 @@ public struct TunnelPlan: Equatable {
 
         var args = ["up", "--socks", String(socksPort), "--gateway", gateway.router, "--interface", gateway.interface]
         for s in servers { args += ["--server", s] }
+        // Explicit, so the helper can still reject a forgotten --server.
+        if servers.isEmpty { args += ["--server", "local"] }
         for c in try parseBypass(bypass) { args += [c.isLinkScoped ? "--link" : "--net", c.description] }
         for d in dns { args += ["--dns", d] }
         if blockIPv6 { args += ["--ipv6", "block"] }
