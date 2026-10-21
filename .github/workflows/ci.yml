@@ -23,4 +23,15 @@ jobs:
         run: swift build
 
       - name: Test
+        env:
+          # Settings window screenshots at several sizes, uploaded below.
+          SNAPSHOT_DIR: ${{ github.workspace }}/build/snapshots
         run: swift test
+
+      - name: Upload settings window screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: settings-window-snapshots
+          path: build/snapshots
+          if-no-files-found: ignore
