@@ -42,7 +42,7 @@ xattr -dr com.apple.quarantine "/Applications/Brook Client.app"
 ```sh
 scripts/build-app.sh --install     # universal app → ~/Applications/Brook Client.app
 scripts/build-app.sh --release     # also packages build/BrookClient-<version>-macOS-universal.{zip,dmg}
-swift test                         # 68 tests: link parsing, CIDRs, routing plan, config, root helper (dry-run)
+swift test                         # 86 tests: link parsing, CIDRs, routing plan, config, HTTP proxy relay, root helper (dry-run)
 Tests/docker/run.sh                # end-to-end data-path lab in Docker (doesn't touch the host network)
 ```
 
