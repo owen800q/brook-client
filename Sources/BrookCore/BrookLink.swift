@@ -134,6 +134,38 @@ public struct BrookLink: Equatable, Sendable {
         return changed ? "brook://\(kind.rawValue)?" + Self.encodeQuery(items) : raw
     }
 
+    /// Whether brook's server connection is a plain TCP stream that an HTTP CONNECT tunnel can carry.
+    /// QUIC is UDP and can never pass an HTTP proxy.
+    public var canUseHTTPProxy: Bool {
+        switch kind {
+        case .server, .wsserver, .wssserver: true
+        case .quicserver, .socks5: false
+        }
+    }
+
+    /// Returns a link that makes brook dial `127.0.0.1:localPort` (the CONNECT relay) instead of
+    /// the server, regardless of whether the link already holds an IP. The ws/wss URL keeps its
+    /// host for TLS SNI and the Host header. UDP always goes inside TCP, since the proxy carries
+    /// nothing else. The relay's CONNECT target is `dialHost:dialPort`.
+    public func relayed(toLocalPort localPort: Int) -> String {
+        var items = query
+        func set(_ key: String, _ value: String) {
+            if let i = items.firstIndex(where: { $0.key == key }) { items[i].value = value } else { items.append((key, value)) }
+        }
+        let local = "127.0.0.1:\(localPort)"
+        switch kind {
+        case .server:
+            set("server", local)
+            set("udpovertcp", "true")
+        case .wsserver, .wssserver:
+            if let v = serverValueWithPort { set(kind.rawValue, v) }
+            set("address", local)
+        case .quicserver, .socks5:
+            break // rejected by config validation
+        }
+        return "brook://\(kind.rawValue)?" + Self.encodeQuery(items)
+    }
+
     // MARK: - Parsing helpers
 
     private static func parseQuery(_ s: String) -> [(key: String, value: String)] {

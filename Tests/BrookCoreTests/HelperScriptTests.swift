@@ -77,6 +77,18 @@ private let validUp = [
         #expect(serverIdx < catchAll && lanIdx < catchAll)
     }
 
+    /// Behind a local HTTP proxy (Px/cntlm on 127.0.0.1) there is no remote address to route
+    /// outside the tunnel, so `up` must work without --server.
+    @Test func upWithoutServerForLocalHTTPProxy() throws {
+        let args = validUp.enumerated().filter { i, a in
+            !(a == "--server" || (i > 0 && validUp[i - 1] == "--server"))
+        }.map(\.element)
+        let r = try runHelper(args, stateDir: freshStateDir())
+        #expect(r.status == 0, "stderr: \(r.stderr)")
+        #expect(!r.commands.contains { $0.hasPrefix("route -n add -host") })
+        #expect(r.commands.contains("route -n add -net 0.0.0.0/1 -interface utun199"))
+    }
+
     @Test func downUndoesWhatUpDid() throws {
         let dir = try freshStateDir()
         #expect(try runHelper(validUp, stateDir: dir).status == 0)

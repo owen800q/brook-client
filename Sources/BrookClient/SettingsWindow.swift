@@ -14,6 +14,8 @@ final class SettingsModel: ObservableObject {
     @Published var connectOnLaunch: Bool
     @Published var blockIPv6: Bool
     @Published var udpOverTCP: Bool
+    @Published var upstreamProxy: String
+    @Published var proxyDetectNote = ""
     @Published var launchAtLogin: Bool
     @Published var helperStatus = "Checking…"
     @Published var helperReady = false
@@ -29,6 +31,7 @@ final class SettingsModel: ObservableObject {
         connectOnLaunch = c.connectOnLaunch
         blockIPv6 = c.blockIPv6
         udpOverTCP = c.udpOverTCP
+        upstreamProxy = c.upstreamProxy
         launchAtLogin = LoginItem.isEnabled
     }
 
@@ -44,10 +47,22 @@ final class SettingsModel: ObservableObject {
         c.connectOnLaunch = connectOnLaunch
         c.blockIPv6 = blockIPv6
         c.udpOverTCP = udpOverTCP
+        c.upstreamProxy = upstreamProxy.trimmingCharacters(in: .whitespacesAndNewlines)
         return c
     }
 
     var errors: [String] { config.validationErrors() }
+    var warnings: [String] { config.warnings() }
+
+    /// Copies the manual HTTPS (or HTTP) proxy from macOS network settings, as set up by IT.
+    func detectSystemProxy() {
+        guard let found = System.systemHTTPProxy(ignoringLocalPorts: [socksPort, httpPort]) else {
+            proxyDetectNote = "No manual HTTP/HTTPS proxy is set in macOS network settings (auto-config/PAC isn't read)."
+            return
+        }
+        upstreamProxy = "\(found.host):\(found.port)"
+        proxyDetectNote = "Copied from macOS network settings."
+    }
 
     private static func tokens(_ s: String) -> [String] {
         s.split(whereSeparator: { $0.isWhitespace || $0 == "," }).map(String.init)
@@ -196,6 +211,19 @@ struct SettingsView: View {
                         TextField("1081", value: $model.httpPort, format: .number.grouping(.never))
                     }
                 }
+            }
+
+            section("Company network") {
+                field("HTTP proxy to reach the server through (optional)") {
+                    TextField("proxy.example.com:8080", text: $model.upstreamProxy)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minWidth: 160, maxWidth: .infinity)
+                }
+                Button("Use macOS Proxy Settings") { model.detectSystemProxy() }
+                    .help("Copy the HTTPS proxy configured in System Settings › Network")
+                caption("For networks that only reach the internet through an HTTP proxy. Brook then connects via HTTP CONNECT: use a wssserver link on port 443. Write user:password@host:port for a proxy login; for NTLM/Kerberos, run Px or cntlm and enter 127.0.0.1:3128.")
+                if !model.proxyDetectNote.isEmpty { caption(model.proxyDetectNote) }
+                ForEach(model.warnings, id: \.self) { wrapping($0).font(.caption).foregroundStyle(.orange) }
             }
 
             section("Bypass VPN for") {

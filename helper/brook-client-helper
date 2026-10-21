@@ -5,7 +5,7 @@
 # allowed (NOPASSWD, this exact path only) via /etc/sudoers.d/com.brookclient.
 # Every argument is validated here; the GUI is not trusted.
 #
-#   up       --socks PORT --gateway IP --interface IF --server IP... [--net CIDR...]
+#   up       --socks PORT --gateway IP --interface IF [--server IP...] [--net CIDR...]
 #            [--link CIDR...] [--dns IP...] [--ipv6 block] --watch PID
 #   proxy-on --interface IF --http PORT --socks PORT [--bypass CIDR...] --watch PID
 #   down
@@ -237,8 +237,9 @@ do_up() {
 		esac
 		shift 2
 	done
-	[ -n "$_socks" ] && [ -n "$_gw" ] && [ -n "$_if" ] && [ -n "$_servers" ] && [ -n "$_watch" ] ||
-		usage "up requires --socks --gateway --interface --server --watch"
+	# --server may be absent when brook reaches the internet through a proxy on this Mac (127.0.0.1).
+	[ -n "$_socks" ] && [ -n "$_gw" ] && [ -n "$_if" ] && [ -n "$_watch" ] ||
+		usage "up requires --socks --gateway --interface --watch"
 	[ $DRY = 1 ] || [ -x "$TUN2SOCKS" ] || { log "missing $TUN2SOCKS"; exit 1; }
 
 	do_down
